@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🤖 LangGraph ReAct Agent</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --chat-bg: #151e2e;
+            --user-msg: #2563eb;
+            --bot-msg: #1e293b;
+            --text-color: #f1f5f9;
+            --text-muted: #94a3b8;
+            --border-color: #334155;
+            --expander-bg: #0b0f19;
+            --accent: #38bdf8;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        header {
+            padding: 14px 20px;
+            background-color: var(--chat-bg);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header-title h1 { margin: 0; font-size: 1.25rem; }
+        .header-title p { margin: 2px 0 0; color: var(--text-muted); font-size: 0.8rem; }
+
+        .backend-config {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+        }
+
+        .backend-config input {
+            background-color: var(--bg-color);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            width: 250px;
+        }
+
+        #chat-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            max-width: 900px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .message {
+            max-width: 85%;
+            padding: 12px 16px;
+            border-radius: 12px;
+            line-height: 1.5;
+            word-wrap: break-word;
+        }
+
+        .user-message {
+            background-color: var(--user-msg);
+            align-self: flex-end;
+            border-bottom-right-radius: 2px;
+        }
+
+        .bot-message {
+            background-color: var(--bot-msg);
+            align-self: flex-start;
+            border-bottom-left-radius: 2px;
+            width: 100%;
+        }
+
+        details {
+            background-color: var(--expander-bg);
+            border-radius: 8px;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid var(--border-color);
+        }
+
+        summary {
+            cursor: pointer;
+            font-weight: 600;
+            color: var(--accent);
+            outline: none;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .log-item {
+            margin-top: 8px;
+            padding-bottom: 8px;
+            border-bottom: 1px dashed var(--border-color);
+            font-size: 0.85rem;
+        }
+
+        .log-item:last-child { border-bottom: none; padding-bottom: 0; }
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+
+        .input-area {
+            padding: 16px 20px;
+            background-color: var(--chat-bg);
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: center;
+        }
+
+        .input-wrapper {
+            display: flex;
+            width: 100%;
+            max-width: 900px;
+            gap: 10px;
+        }
+
+        input[type="text"]#prompt {
+            flex: 1;
+            padding: 12px 18px;
+            border-radius: 24px;
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-color);
+            color: white;
+            font-size: 0.95rem;
+            outline: none;
+        }
+
+        input[type="text"]#prompt:focus { border-color: var(--accent); }
+
+        button {
+            padding: 10px 22px;
+            border-radius: 24px;
+            border: none;
+            background-color: var(--user-msg);
+            color: white;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        button:hover { opacity: 0.9; }
+        button:disabled { background-color: var(--border-color); cursor: not-allowed; }
+
+        .markdown-body pre { background: #000; padding: 12px; border-radius: 6px; overflow-x: auto; }
+        .markdown-body code { background: #000; padding: 2px 5px; border-radius: 4px; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="header-title">
+            <h1>🤖 LangGraph ReAct Agent</h1>
+            <p>Qwen on Groq + Real-time Web & Reasoning Tools</p>
+        </div>
+        <div class="backend-config">
+            <label for="backend-url">Backend URL:</label>
+            <input type="text" id="backend-url" value="http://localhost:8000" placeholder="https://your-api.onrender.com">
+        </div>
+    </header>
+
+    <div id="chat-container"></div>
+
+    <div class="input-area">
+        <form class="input-wrapper" id="chat-form">
+            <input type="text" id="prompt" placeholder="Ask anything (e.g., 'What time is it in Tokyo?', 'Latest space discoveries')..." required autocomplete="off">
+            <button type="submit" id="send-btn">Send</button>
+        </form>
+    </div>
+
+    <script>
+        const form = document.getElementById('chat-form');
+        const input = document.getElementById('prompt');
+        const sendBtn = document.getElementById('send-btn');
+        const chatContainer = document.getElementById('chat-container');
+        const backendInput = document.getElementById('backend-url');
+
+        // Persist backend URL in browser localStorage
+        const savedUrl = localStorage.getItem('agent_backend_url');
+        if (savedUrl) backendInput.value = savedUrl;
+        backendInput.addEventListener('change', () => {
+            localStorage.setItem('agent_backend_url', backendInput.value.trim());
+        });
+
+        function appendUserMessage(text) {
+            const div = document.createElement('div');
+            div.className = 'message user-message';
+            div.textContent = text;
+            chatContainer.appendChild(div);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function createBotMessageBlock() {
+            const div = document.createElement('div');
+            div.className = 'message bot-message markdown-body';
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.innerHTML = '<i>Agent is reasoning...</i>';
+            
+            const thoughtsDetails = document.createElement('details');
+            thoughtsDetails.style.display = 'none';
+            thoughtsDetails.innerHTML = `<summary>🔍 View Backend Thought Process & Tools</summary><div class="thoughts-content"></div>`;
+            
+            const sourcesDetails = document.createElement('details');
+            sourcesDetails.style.display = 'none';
+            sourcesDetails.innerHTML = `<summary>📚 View Extracted Resources</summary><div class="sources-content"></div>`;
+
+            div.appendChild(thoughtsDetails);
+            div.appendChild(sourcesDetails);
+            div.appendChild(contentDiv);
+            chatContainer.appendChild(div);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+
+            return {
+                contentDiv,
+                thoughtsDetails,
+                thoughtsContent: thoughtsDetails.querySelector('.thoughts-content'),
+                sourcesDetails,
+                sourcesContent: sourcesDetails.querySelector('.sources-content')
+            };
+        }
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const prompt = input.value.trim();
+            if (!prompt) return;
+
+            const baseUrl = backendInput.value.trim().replace(/\\/$/, '');
+            appendUserMessage(prompt);
+            input.value = '';
+            input.disabled = true;
+            sendBtn.disabled = true;
+
+            const botUI = createBotMessageBlock();
+
+            try {
+                const response = await fetch(`${baseUrl}/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    let boundary = buffer.indexOf('\\n\\n');
+
+                    while (boundary !== -1) {
+                        let chunk = buffer.slice(0, boundary);
+                        buffer = buffer.slice(boundary + 2);
+                        boundary = buffer.indexOf('\\n\\n');
+
+                        if (chunk.startsWith('data: ')) {
+                            const dataStr = chunk.substring(6);
+                            if (dataStr === '[DONE]') continue;
+
+                            try {
+                                const data = JSON.parse(dataStr);
+
+                                if (data.type === 'thought') {
+                                    botUI.thoughtsDetails.style.display = 'block';
+                                    botUI.thoughtsContent.innerHTML += `<div class="log-item">${marked.parse(data.content)}</div>`;
+                                } else if (data.type === 'source') {
+                                    botUI.sourcesDetails.style.display = 'block';
+                                    let link = data.url === '#' ? data.title : `<a href="${data.url}" target="_blank">${data.title}</a>`;
+                                    botUI.sourcesContent.innerHTML += `<div class="log-item">• ${link}</div>`;
+                                } else if (data.type === 'message') {
+                                    botUI.contentDiv.innerHTML = marked.parse(data.content);
+                                }
+
+                                chatContainer.scrollTop = chatContainer.scrollHeight;
+                            } catch (err) {
+                                console.error('Parse error:', err);
+                            }
+                        }
+                    }
+                }
+
+                if (botUI.thoughtsDetails.style.display === 'none') {
+                    botUI.thoughtsDetails.style.display = 'block';
+                    botUI.thoughtsContent.innerHTML = `<div class="log-item">🧠 <b>Thought:</b> No external tools were needed. Answered directly from model knowledge.</div>`;
+                }
+
+            } catch (error) {
+                botUI.contentDiv.innerHTML = `<span style="color: #f87171;">⚠️ Connection Failed: Could not reach backend at <code>${baseUrl}</code>. Make sure the server is online and CORS is allowed.</span>`;
+            } finally {
+                input.disabled = false;
+                sendBtn.disabled = false;
+                input.focus();
+            }
+        });
+    </script>
+</body>
+</html>

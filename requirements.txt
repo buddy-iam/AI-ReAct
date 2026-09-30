@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+pydantic
+langchain-groq
+langchain-community
+langgraph
+wikipedia
+tavily-python
