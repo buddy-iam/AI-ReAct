@@ -186,7 +186,7 @@
     <div id="chat-container"></div>
 
     <div class="input-area">
-        <form class="input-wrapper" id="chat-form">
+        <form class="input-wrapper" id="chat-form" onsubmit="event.preventDefault();>
             <input type="text" id="prompt" placeholder="Ask anything (e.g., 'What time is it in Tokyo?', 'Latest space discoveries')..." required autocomplete="off">
             <button type="submit" id="send-btn">Send</button>
         </form>
